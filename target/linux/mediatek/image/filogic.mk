@@ -3400,7 +3400,7 @@ define Device/nradio_c8-688
   ARTIFACT/emmc-preloader.bin := mt7981-bl2 emmc-ddr4
   ARTIFACT/emmc-bl31-uboot.fip := mt7981-bl31-uboot nradio_c8-688
 endef
-TARGET_DEVICES += nradio_c8-688
+TARGET_DEVICES += NRadio_c8-688
 
 define Device/nradio_c5800-688
   DEVICE_VENDOR := NRadio
@@ -3424,7 +3424,7 @@ define Device/nradio_c5800-688
   ARTIFACT/emmc-preloader.bin := mt7981-bl2 emmc-ddr4
   ARTIFACT/emmc-bl31-uboot.fip := mt7981-bl31-uboot rfb-emmc
 endef
-TARGET_DEVICES += nradio_c5800-688
+TARGET_DEVICES += NRadio_c5800-688
 
 define Device/nradio_c2000max
   DEVICE_VENDOR := NRadio
@@ -3455,4 +3455,4 @@ define Device/nradio_c2000max
 				) \
 				  gzip
 endef
-TARGET_DEVICES += nradio_c2000max
+TARGET_DEVICES += NRadio_c2000max
