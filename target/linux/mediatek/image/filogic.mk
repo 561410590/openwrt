@@ -1599,6 +1599,47 @@ define Device/huasifei_wh3000-pro
 endef
 TARGET_DEVICES += huasifei_wh3000-pro
 
+define Device/nradio_c5800-688
+  DEVICE_VENDOR := NRadio
+  DEVICE_MODEL := C5800-688
+  DEVICE_DTS := mt7981b-nradio-c5800-688
+  DEVICE_DTS_DIR := $(DTS_DIR)/mediatek
+  DEVICE_PACKAGES := \
+	kmod-conninfra kmod-mediatek_hnat kmod-mt_wifi kmod-warp \
+	wifi-dats wifi-profile mtwifi-cfg luci-app-mtwifi-cfg \
+	python3-light luci-theme-argon uhttpd uhttpd-mod-ubus \
+	f2fsck mkf2fs \
+	kmod-usb3 kmod-usb-xhci-hcd kmod-usb-xhci-mtk \
+	kmod-usb-acm kmod-usb-net kmod-usb-net-cdc-ether \
+	kmod-usb-net-cdc-mbim kmod-usb-net-cdc-ncm \
+	kmod-usb-net-qmi-wwan kmod-usb-net-rndis \
+	kmod-usb-net-sierrawireless \
+	kmod-usb-serial kmod-usb-serial-option \
+	kmod-usb-serial-qualcomm kmod-usb-serial-wwan \
+	kmod-usb-wdm
+endef
+TARGET_DEVICES += nradio_c5800-688
+define Device/nradio_c8-688
+  DEVICE_VENDOR := NRadio
+  DEVICE_MODEL := C8-688
+  DEVICE_DTS := mt7981b-nradio-c8-688
+  DEVICE_DTS_DIR := $(DTS_DIR)/mediatek
+  DEVICE_PACKAGES := \
+	kmod-conninfra kmod-mediatek_hnat kmod-mt_wifi kmod-warp \
+	wifi-dats wifi-profile mtwifi-cfg luci-app-mtwifi-cfg \
+	python3-light luci-theme-argon uhttpd uhttpd-mod-ubus \
+	f2fsck mkf2fs \
+	kmod-usb3 kmod-usb-xhci-hcd kmod-usb-xhci-mtk \
+	kmod-usb-acm kmod-usb-core kmod-usb-ehci \
+	kmod-usb-net kmod-usb-net-cdc-ether \
+	kmod-usb-net-cdc-ncm kmod-usb-net-huawei-cdc-ncm \
+	kmod-usb-net-rndis kmod-usb-ohci \
+	kmod-usb-serial kmod-usb-serial-option \
+	kmod-usb-serial-wwan kmod-usb-storage \
+	kmod-usb-uhci kmod-usb-wdm
+endef
+TARGET_DEVICES += nradio_c8-688
+
 define Device/imou_hx21
   DEVICE_VENDOR := Imou
   DEVICE_MODEL := HX21
