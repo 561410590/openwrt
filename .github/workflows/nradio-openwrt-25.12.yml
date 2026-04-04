@@ -1,0 +1,223 @@
+name: NRadio OpenWrt 25.12
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/openwrt-25.12-nradio-build
+    paths:
+      - .github/workflows/nradio-openwrt-25.12.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nradio-openwrt-25.12-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.device }}
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: nradio_c5800-688
+            dts: mt7981-nradio-c5800-688
+          - device: nradio_c8-688
+            dts: mt7981-nradio-c8-688
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 8G
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - name: Checkout official OpenWrt
+        uses: actions/checkout@v4
+        with:
+          repository: openwrt/openwrt
+          ref: openwrt-25.12
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            bison build-essential ccache clang curl device-tree-compiler file \
+            flex g++ g++-multilib gawk gcc-multilib gettext git libelf-dev \
+            libncurses-dev libssl-dev patch pkgconf python3 python3-pip \
+            python3-setuptools rsync subversion swig unzip wget xxd zlib1g-dev
+
+      - name: Restore dl cache
+        uses: actions/cache/restore@v4
+        with:
+          path: dl
+          key: ${{ runner.os }}-openwrt25.12-dl-${{ matrix.device }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-openwrt25.12-dl-${{ matrix.device }}-
+            ${{ runner.os }}-openwrt25.12-dl-
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-openwrt25.12-ccache-${{ matrix.device }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-openwrt25.12-ccache-${{ matrix.device }}-
+            ${{ runner.os }}-openwrt25.12-ccache-
+
+      - name: Overlay NRadio device files
+        env:
+          OVERLAY_BASE: https://raw.githubusercontent.com/561410590/openwrt/main/target/linux/mediatek
+        run: |
+          set -euxo pipefail
+          mkdir -p target/linux/mediatek/dts
+          for file in \
+            mt7981-nradio-common.dtsi \
+            mt7981-nradio-c5800-688-emmc.dtsi \
+            mt7981-nradio-c5800-688.dts \
+            mt7981-nradio-c8-688-emmc.dtsi \
+            mt7981-nradio-c8-688.dts
+          do
+            curl -fsSL "${OVERLAY_BASE}/dts/${file}" -o "target/linux/mediatek/dts/${file}"
+          done
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          common = Path("target/linux/mediatek/dts/mt7981-nradio-common.dtsi")
+          common_text = common.read_text()
+          include_line = '#include <dt-bindings/input/input.h>\n\n'
+          if "dt-bindings/input/input.h" not in common_text:
+              common.write_text(include_line + common_text)
+
+          filogic = Path("target/linux/mediatek/image/filogic.mk")
+          data = filogic.read_text()
+          if "define Device/nradio_c5800-688" in data and "define Device/nradio_c8-688" in data:
+              raise SystemExit(0)
+
+          anchor = """define Device/nradio_c8-668gl
+            DEVICE_VENDOR := NRadio
+            DEVICE_MODEL := C8-668GL
+            DEVICE_DTS := mt7981b-nradio-c8-668gl
+            DEVICE_DTS_DIR := ../dts
+            DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \\
+          \tkmod-usb-serial-option kmod-usb-net-cdc-ether kmod-usb-net-qmi-wwan \\
+          \tkmod-usb3
+            IMAGE_SIZE := 131072k
+            IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata | check-size
+          endef
+          TARGET_DEVICES += nradio_c8-668gl"""
+
+          block = """
+
+          define Device/nradio_c5800-688
+            DEVICE_VENDOR := NRadio
+            DEVICE_MODEL := C5800-688
+            DEVICE_DTS := mt7981-nradio-c5800-688
+            DEVICE_DTS_DIR := ../dts
+            SUPPORTED_DEVICES += HCMT7981-emmc
+            DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \\
+          \tkmod-usb-acm kmod-usb-net-cdc-ether kmod-usb-net-cdc-mbim \\
+          \tkmod-usb-net-cdc-ncm kmod-usb-net-huawei-cdc-ncm kmod-usb-net-qmi-wwan \\
+          \tkmod-usb-net-rndis kmod-usb-net-sierrawireless kmod-usb-serial \\
+          \tkmod-usb-serial-option kmod-usb-serial-qualcomm kmod-usb-serial-wwan \\
+          \tkmod-usb-wdm kmod-usb3
+            IMAGE_SIZE := 131072k
+            IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata | check-size
+          endef
+          TARGET_DEVICES += nradio_c5800-688
+
+          define Device/nradio_c8-688
+            DEVICE_VENDOR := NRadio
+            DEVICE_MODEL := C8-688
+            DEVICE_DTS := mt7981-nradio-c8-688
+            DEVICE_DTS_DIR := ../dts
+            SUPPORTED_DEVICES += HCMT7981-688-emmc
+            DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \\
+          \tkmod-usb-acm kmod-usb-net-cdc-ether kmod-usb-net-cdc-mbim \\
+          \tkmod-usb-net-cdc-ncm kmod-usb-net-huawei-cdc-ncm kmod-usb-net-qmi-wwan \\
+          \tkmod-usb-net-rndis kmod-usb-net-sierrawireless kmod-usb-serial \\
+          \tkmod-usb-serial-option kmod-usb-serial-qualcomm kmod-usb-serial-wwan \\
+          \tkmod-usb-wdm kmod-usb3
+            IMAGE_SIZE := 131072k
+            IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata | check-size
+          endef
+          TARGET_DEVICES += nradio_c8-688
+          """
+
+          if anchor not in data:
+              raise SystemExit("nradio_c8-668gl anchor block not found in filogic.mk")
+
+          filogic.write_text(data.replace(anchor, anchor + block))
+          PY
+
+      - name: Update feeds
+        run: |
+          set -euxo pipefail
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure build
+        run: |
+          set -euxo pipefail
+          cat > .config <<EOF
+          CONFIG_TARGET_mediatek=y
+          CONFIG_TARGET_mediatek_filogic=y
+          CONFIG_TARGET_mediatek_filogic_DEVICE_${{ matrix.device }}=y
+          CONFIG_CCACHE=y
+          EOF
+          ccache -M "${CCACHE_MAXSIZE}" || true
+          make defconfig
+          ccache -s || true
+
+      - name: Download sources
+        run: |
+          set -euxo pipefail
+          make download -j"$(nproc)"
+
+      - name: Build firmware
+        run: |
+          set -euxo pipefail
+          make -j"$(nproc)"
+
+      - name: Collect artifacts
+        if: always()
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          find bin/targets/mediatek/filogic -maxdepth 1 -type f \
+            \( -name "*${{ matrix.dts }}*" -o -name "*${{ matrix.device }}*" \) \
+            -exec cp -f {} artifacts/ \;
+          find bin/targets/mediatek/filogic -maxdepth 1 -type f \
+            \( -name "*.manifest" -o -name "*.buildinfo" -o -name "*.sha256sums" \) \
+            -exec cp -f {} artifacts/ \; || true
+          ls -lah artifacts
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-25.12-${{ matrix.device }}
+          path: artifacts
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Save dl cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: dl
+          key: ${{ runner.os }}-openwrt25.12-dl-${{ matrix.device }}-${{ github.run_id }}
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-openwrt25.12-ccache-${{ matrix.device }}-${{ github.run_id }}
