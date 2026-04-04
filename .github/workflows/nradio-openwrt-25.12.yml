@@ -92,9 +92,19 @@ jobs:
 
           common = Path("target/linux/mediatek/dts/mt7981-nradio-common.dtsi")
           common_text = common.read_text()
-          include_line = '#include <dt-bindings/input/input.h>\n\n'
+          if '#include "mt7981.dtsi"' in common_text:
+              common_text = common_text.replace('#include "mt7981.dtsi"', '#include "mt7981b.dtsi"', 1)
+
+          header_lines = []
+          if "dt-bindings/gpio/gpio.h" not in common_text:
+              header_lines.append('#include <dt-bindings/gpio/gpio.h>')
           if "dt-bindings/input/input.h" not in common_text:
-              common.write_text(include_line + common_text)
+              header_lines.append('#include <dt-bindings/input/input.h>')
+
+          if header_lines:
+              common_text = "\n".join(header_lines) + "\n\n" + common_text
+
+          common.write_text(common_text)
 
           filogic = Path("target/linux/mediatek/image/filogic.mk")
           data = filogic.read_text()
@@ -179,12 +189,33 @@ jobs:
       - name: Download sources
         run: |
           set -euxo pipefail
-          make download -j"$(nproc)"
+          NPROC="$(nproc)"
+          echo "Using ${NPROC} threads for download"
+          make download -j"${NPROC}"
 
       - name: Build firmware
         run: |
           set -euxo pipefail
-          make -j"$(nproc)"
+          NPROC="$(nproc)"
+          echo "Using ${NPROC} threads for build"
+          make -j"${NPROC}" V=s 2>&1 | tee build.log
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-25.12-logs-${{ matrix.device }}
+          retention-days: 14
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: |
+            .config
+            build.log
+            bin/targets/mediatek/filogic/*buildinfo
+            bin/targets/mediatek/filogic/sha256sums
+            logs/**
+            tmp/**/*.log
+            tmp/**/*.txt
 
       - name: Collect artifacts
         if: always()
