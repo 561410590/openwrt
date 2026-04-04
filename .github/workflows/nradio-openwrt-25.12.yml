@@ -217,25 +217,73 @@ jobs:
             tmp/**/*.log
             tmp/**/*.txt
 
-      - name: Collect artifacts
+      - name: Collect firmware
         if: always()
         run: |
           set -euxo pipefail
-          mkdir -p artifacts
-          find bin/targets/mediatek/filogic -maxdepth 1 -type f \
-            \( -name "*${{ matrix.dts }}*" -o -name "*${{ matrix.device }}*" \) \
-            -exec cp -f {} artifacts/ \;
-          find bin/targets/mediatek/filogic -maxdepth 1 -type f \
-            \( -name "*.manifest" -o -name "*.buildinfo" -o -name "*.sha256sums" \) \
-            -exec cp -f {} artifacts/ \; || true
-          ls -lah artifacts
+          mkdir -p artifact metadata
+          python3 - <<'PY'
+          from pathlib import Path
 
-      - name: Upload artifacts
+          firmware_dir = Path("bin/targets/mediatek/filogic")
+          device = "${{ matrix.device }}"
+          dts = "${{ matrix.dts }}"
+          image_suffixes = (".bin", ".img", ".img.gz", ".itb", ".tar")
+
+          image_files = sorted(
+              p for p in firmware_dir.iterdir()
+              if p.is_file()
+              and (device in p.name or dts in p.name)
+              and p.name.endswith(image_suffixes)
+              and not p.name.endswith((".sha256", ".manifest"))
+          )
+          if not image_files:
+              print(f"No firmware images found for {device} / {dts} in {firmware_dir}")
+              for p in sorted(firmware_dir.glob("*")):
+                  print(p)
+              raise SystemExit(1)
+
+          sysupgrade = next((p for p in image_files if "sysupgrade" in p.name), image_files[0])
+          artifact = Path("artifact")
+          lines = []
+
+          for src in image_files:
+              dst = artifact / src.name
+              dst.write_bytes(src.read_bytes())
+              lines.append(str(src))
+
+          renamed = artifact / f"{device}-sysupgrade.bin"
+          generic = artifact / "sysupgrade.bin"
+          renamed.write_bytes(sysupgrade.read_bytes())
+          generic.write_bytes(sysupgrade.read_bytes())
+          lines.extend([str(sysupgrade), str(sysupgrade)])
+          (artifact / "firmware-list.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+          sha256sum artifact/* > "artifact/${{ matrix.device }}-sha256sums.txt"
+
+          find bin/targets/mediatek/filogic -maxdepth 1 -type f \
+            \( -name "*.manifest" -o -name "*.buildinfo" -o -name "profiles.json" -o -name "sha256sums" \) \
+            -exec cp -f {} metadata/ \; || true
+
+          ls -lah artifact
+          ls -lah metadata
+
+      - name: Upload firmware artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: openwrt-25.12-${{ matrix.device }}
-          path: artifacts
+          name: firmware-${{ matrix.device }}
+          path: artifact
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload metadata artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metadata-${{ matrix.device }}
+          path: metadata
           if-no-files-found: error
           retention-days: 14
 
