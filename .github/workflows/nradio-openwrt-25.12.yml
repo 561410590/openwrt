@@ -306,7 +306,7 @@ jobs:
           board04 = Path("target/linux/mediatek/filogic/base-files/etc/board.d/04_defaults")
           replace_once(
               board04,
-              "case $board in\n\topenwrt,one)\n",
+              "case $board in\nopenwrt,one)\n",
               "case $board in\n"
               "\tnradio,c5800-688|\\\n"
               "\tnradio_c5800-688|\\\n"
