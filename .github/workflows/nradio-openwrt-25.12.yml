@@ -123,14 +123,6 @@ jobs:
                   return
               path.write_text(text.rstrip() + "\n\n" + block.strip() + "\n")
 
-          def replace_once(path: Path, old: str, new: str) -> None:
-              text = path.read_text()
-              if new in text:
-                  return
-              if old not in text:
-                  raise SystemExit(f"expected anchor not found in {path}: {old[:80]!r}")
-              path.write_text(text.replace(old, new, 1))
-
           common = Path("target/linux/mediatek/dts/mt7981-nradio-common.dtsi")
           common_text = common.read_text()
           if '#include "mt7981.dtsi"' in common_text:
@@ -256,125 +248,158 @@ jobs:
               raise SystemExit("nradio_c8-668gl anchor block not found in filogic.mk")
 
           filogic.write_text(data.replace(anchor, anchor + block))
+          PY
+
+      - name: Patch NRadio board defaults
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              text = path.read_text()
+              if new in text:
+                  return
+              if old not in text:
+                  raise SystemExit(f"expected anchor not found in {path}: {old!r}")
+              path.write_text(text.replace(old, new, 1))
 
           board02 = Path("target/linux/mediatek/filogic/base-files/etc/board.d/02_network")
           replace_once(
               board02,
-              """\tcase $board in
-\tabt,asr3000|\\""",
-              """\tcase $board in
-\tnradio,c5800-688|\\
-\tnradio_c5800-688|\\
-\thcmt7981-emmc|\\
-\tHCMT7981-emmc|\\
-\tnradio,c8-688|\\
-\tnradio_c8-688|\\
-\thcmt7981-688-emmc|\\
-\tHCMT7981-688-emmc)
-\t\tucidef_set_interface "lan" device "lan1 lan2 lan3" protocol static ipaddr "192.168.66.1" netmask "255.255.255.0"
-\t\tucidef_set_interface_wan eth1 dhcp
-\t\t;;
-\tabt,asr3000|\\""",
+              "\tabt,asr3000|\\\n",
+              "\tnradio,c5800-688|\\\n"
+              "\tnradio_c5800-688|\\\n"
+              "\thcmt7981-emmc|\\\n"
+              "\tHCMT7981-emmc|\\\n"
+              "\tnradio,c8-688|\\\n"
+              "\tnradio_c8-688|\\\n"
+              "\thcmt7981-688-emmc|\\\n"
+              "\tHCMT7981-688-emmc)\n"
+              "\t\tucidef_set_interface \"lan\" device \"lan1 lan2 lan3\" protocol static ipaddr \"192.168.66.1\" netmask \"255.255.255.0\"\n"
+              "\t\tucidef_set_interface_wan \"eth1\"\n"
+              "\t\t;;\n"
+              "\tabt,asr3000|\\\n",
+          )
+          replace_once(
+              board02,
+              "\tnradio,c8-668gl)\n"
+              "\t\tlan_mac=$(mmc_get_mac_ascii bdinfo \"fac_mac \")\n"
+              "\t\twan_mac=$(macaddr_add \"$lan_mac\" 2)\n"
+              "\t\tlabel_mac=$lan_mac\n"
+              "\t\t;;\n",
+              "\tnradio,c8-668gl|\\\n"
+              "\tnradio,c5800-688|\\\n"
+              "\tnradio_c5800-688|\\\n"
+              "\thcmt7981-emmc|\\\n"
+              "\tHCMT7981-emmc|\\\n"
+              "\tnradio,c8-688|\\\n"
+              "\tnradio_c8-688|\\\n"
+              "\thcmt7981-688-emmc|\\\n"
+              "\tHCMT7981-688-emmc)\n"
+              "\t\tlan_mac=$(mmc_get_mac_ascii bdinfo \"fac_mac \")\n"
+              "\t\twan_mac=$(macaddr_add \"$lan_mac\" 2)\n"
+              "\t\tlabel_mac=$lan_mac\n"
+              "\t\t;;\n",
           )
 
           board04 = Path("target/linux/mediatek/filogic/base-files/etc/board.d/04_defaults")
           replace_once(
               board04,
-              """case $board in
-\topenwrt,one)""",
-              """case $board in
-\tnradio,c5800-688|\\
-\tnradio_c5800-688|\\
-\thcmt7981-emmc|\\
-\tHCMT7981-emmc|\\
-\tnradio,c8-688|\\
-\tnradio_c8-688|\\
-\thcmt7981-688-emmc|\\
-\tHCMT7981-688-emmc)
-\t\tuci -q batch <<-'EOF_INNER'
-\t\t\tset network.lan='interface'
-\t\t\tset network.lan.device='br-lan'
-\t\t\tset network.lan.proto='static'
-\t\t\tset network.lan.ipaddr='192.168.66.1'
-\t\t\tset network.lan.netmask='255.255.255.0'
-\t\t\tdelete network.lan.ifname
-
-\t\t\tdelete network.@device[0]
-\t\t\tadd network device
-\t\t\tset network.@device[-1].name='br-lan'
-\t\t\tset network.@device[-1].type='bridge'
-\t\t\tadd_list network.@device[-1].ports='lan1'
-\t\t\tadd_list network.@device[-1].ports='lan2'
-\t\t\tadd_list network.@device[-1].ports='lan3'
-
-\t\t\tset network.wan='interface'
-\t\t\tset network.wan.proto='dhcp'
-\t\t\tset network.wan.device='eth1'
-\t\t\tset network.wan6='interface'
-\t\t\tset network.wan6.proto='dhcpv6'
-\t\t\tset network.wan6.device='eth1'
-\t\t\tdelete network.wan1
-\t\t\tdelete network.wan1v6
-
-\t\t\tset network.BLUE4WAN='interface'
-\t\t\tset network.BLUE4WAN.proto='dhcp'
-\t\t\tset network.BLUE4WAN.device='BLUE4'
-\t\t\tset network.BLUE4WANV6='interface'
-\t\t\tset network.BLUE4WANV6.proto='dhcpv6'
-\t\t\tset network.BLUE4WANV6.device='BLUE4'
-\t\tEOF_INNER
-\t\tuci commit network
-\t\t;;
-\topenwrt,one)""",
+              "case $board in\n\topenwrt,one)\n",
+              "case $board in\n"
+              "\tnradio,c5800-688|\\\n"
+              "\tnradio_c5800-688|\\\n"
+              "\thcmt7981-emmc|\\\n"
+              "\tHCMT7981-emmc|\\\n"
+              "\tnradio,c8-688|\\\n"
+              "\tnradio_c8-688|\\\n"
+              "\thcmt7981-688-emmc|\\\n"
+              "\tHCMT7981-688-emmc)\n"
+              "\t\tuci -q batch <<-'EOF_INNER'\n"
+              "\t\t\tset network.lan='interface'\n"
+              "\t\t\tset network.lan.device='br-lan'\n"
+              "\t\t\tset network.lan.proto='static'\n"
+              "\t\t\tset network.lan.ipaddr='192.168.66.1'\n"
+              "\t\t\tset network.lan.netmask='255.255.255.0'\n"
+              "\t\t\tdelete network.lan.ifname\n"
+              "\n"
+              "\t\t\tdelete network.@device[0]\n"
+              "\t\t\tadd network device\n"
+              "\t\t\tset network.@device[-1].name='br-lan'\n"
+              "\t\t\tset network.@device[-1].type='bridge'\n"
+              "\t\t\tadd_list network.@device[-1].ports='lan1'\n"
+              "\t\t\tadd_list network.@device[-1].ports='lan2'\n"
+              "\t\t\tadd_list network.@device[-1].ports='lan3'\n"
+              "\n"
+              "\t\t\tset network.wan='interface'\n"
+              "\t\t\tset network.wan.proto='dhcp'\n"
+              "\t\t\tset network.wan.device='eth1'\n"
+              "\t\t\tset network.wan6='interface'\n"
+              "\t\t\tset network.wan6.proto='dhcpv6'\n"
+              "\t\t\tset network.wan6.device='eth1'\n"
+              "\t\t\tdelete network.wan1\n"
+              "\t\t\tdelete network.wan1v6\n"
+              "\n"
+              "\t\t\tset network.BLUE4WAN='interface'\n"
+              "\t\t\tset network.BLUE4WAN.proto='dhcp'\n"
+              "\t\t\tset network.BLUE4WAN.device='BLUE4'\n"
+              "\t\t\tset network.BLUE4WANV6='interface'\n"
+              "\t\t\tset network.BLUE4WANV6.proto='dhcpv6'\n"
+              "\t\t\tset network.BLUE4WANV6.device='BLUE4'\n"
+              "\t\tEOF_INNER\n"
+              "\t\tuci commit network\n"
+              "\t\t;;\n"
+              "\topenwrt,one)\n",
           )
 
           platform = Path("target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh")
           replace_once(
               platform,
-              """\tnradio,c8-668gl)""",
-              """\tnradio,c8-668gl|\\
-\tnradio,c5800-688|\\
-\tnradio_c5800-688|\\
-\tnradio,c8-688|\\
-\tnradio_c8-688|\\
-\thcmt7981-emmc|\\
-\tHCMT7981-emmc|\\
-\thcmt7981-688-emmc|\\
-\tHCMT7981-688-emmc)""",
+              "\tnradio,c8-668gl)\n",
+              "\tnradio,c8-668gl|\\\n"
+              "\tnradio,c5800-688|\\\n"
+              "\tnradio_c5800-688|\\\n"
+              "\tnradio,c8-688|\\\n"
+              "\tnradio_c8-688|\\\n"
+              "\thcmt7981-emmc|\\\n"
+              "\tHCMT7981-emmc|\\\n"
+              "\thcmt7981-688-emmc|\\\n"
+              "\tHCMT7981-688-emmc)\n",
           )
           replace_once(
               platform,
-              """\tcreatlentem,clt-r30b1|\\
-\tcreatlentem,clt-r30b1-112m|\\
-\tnradio,c8-668gl)""",
-              """\tcreatlentem,clt-r30b1|\\
-\tcreatlentem,clt-r30b1-112m|\\
-\tnradio,c8-668gl|\\
-\tnradio,c5800-688|\\
-\tnradio_c5800-688|\\
-\tnradio,c8-688|\\
-\tnradio_c8-688|\\
-\thcmt7981-emmc|\\
-\tHCMT7981-emmc|\\
-\thcmt7981-688-emmc|\\
-\tHCMT7981-688-emmc)""",
+              "\tcreatlentem,clt-r30b1|\\\n"
+              "\tcreatlentem,clt-r30b1-112m|\\\n"
+              "\tnradio,c8-668gl)\n",
+              "\tcreatlentem,clt-r30b1|\\\n"
+              "\tcreatlentem,clt-r30b1-112m|\\\n"
+              "\tnradio,c8-668gl|\\\n"
+              "\tnradio,c5800-688|\\\n"
+              "\tnradio_c5800-688|\\\n"
+              "\tnradio,c8-688|\\\n"
+              "\tnradio_c8-688|\\\n"
+              "\thcmt7981-emmc|\\\n"
+              "\tHCMT7981-emmc|\\\n"
+              "\thcmt7981-688-emmc|\\\n"
+              "\tHCMT7981-688-emmc)\n",
           )
           replace_once(
               platform,
-              """\tjdcloud,re-cp-03|\\
-\tnradio,c8-668gl|\\
-\tsmartrg,sdg-8612|\\""",
-              """\tjdcloud,re-cp-03|\\
-\tnradio,c8-668gl|\\
-\tnradio,c5800-688|\\
-\tnradio_c5800-688|\\
-\tnradio,c8-688|\\
-\tnradio_c8-688|\\
-\thcmt7981-emmc|\\
-\tHCMT7981-emmc|\\
-\thcmt7981-688-emmc|\\
-\tHCMT7981-688-emmc|\\
-\tsmartrg,sdg-8612|\\""",
+              "\tjdcloud,re-cp-03|\\\n"
+              "\tnradio,c8-668gl|\\\n"
+              "\tsmartrg,sdg-8612|\\\n",
+              "\tjdcloud,re-cp-03|\\\n"
+              "\tnradio,c8-668gl|\\\n"
+              "\tnradio,c5800-688|\\\n"
+              "\tnradio_c5800-688|\\\n"
+              "\tnradio,c8-688|\\\n"
+              "\tnradio_c8-688|\\\n"
+              "\thcmt7981-emmc|\\\n"
+              "\tHCMT7981-emmc|\\\n"
+              "\thcmt7981-688-emmc|\\\n"
+              "\tHCMT7981-688-emmc|\\\n"
+              "\tsmartrg,sdg-8612|\\\n",
           )
           PY
 
