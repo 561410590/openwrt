@@ -117,6 +117,12 @@ jobs:
               if removed:
                   path.write_text("\n".join(output) + "\n")
 
+          def append_block(path: Path, marker: str, block: str) -> None:
+              text = path.read_text()
+              if marker in text:
+                  return
+              path.write_text(text.rstrip() + "\n\n" + block.strip() + "\n")
+
           common = Path("target/linux/mediatek/dts/mt7981-nradio-common.dtsi")
           common_text = common.read_text()
           if '#include "mt7981.dtsi"' in common_text:
@@ -137,7 +143,49 @@ jobs:
               "mt7981-nradio-c5800-688-emmc.dtsi",
               "mt7981-nradio-c8-688-emmc.dtsi",
           ):
-              drop_block(Path("target/linux/mediatek/dts") / name, "&hnat")
+              path = Path("target/linux/mediatek/dts") / name
+              drop_block(path, "&hnat")
+              append_block(
+                  path,
+                  "block-partition-factory",
+                  """
+          &mmc0 {
+          	#address-cells = <1>;
+          	#size-cells = <0>;
+
+          	card@0 {
+          		compatible = "mmc-card";
+          		reg = <0>;
+
+          		block {
+          			compatible = "block-device";
+
+          			partitions {
+          				block-partition-factory {
+          					partname = "factory";
+
+          					nvmem-layout {
+          						compatible = "fixed-layout";
+          						#address-cells = <1>;
+          						#size-cells = <1>;
+
+          						eeprom_factory_0: eeprom@0 {
+          							reg = <0x0 0x1000>;
+          						};
+          					};
+          				};
+          			};
+          		};
+          	};
+          };
+
+          &wifi {
+          	nvmem-cells = <&eeprom_factory_0>;
+          	nvmem-cell-names = "eeprom";
+          	status = "okay";
+          };
+                  """,
+              )
 
           filogic = Path("target/linux/mediatek/image/filogic.mk")
           data = filogic.read_text()
@@ -166,6 +214,7 @@ jobs:
             DEVICE_DTS_DIR := ../dts
             SUPPORTED_DEVICES += HCMT7981-emmc
             DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \\
+          \tluci uhttpd uhttpd-mod-ubus rpcd rpcd-mod-uci \\
           \tkmod-usb-acm kmod-usb-net-cdc-ether kmod-usb-net-cdc-mbim \\
           \tkmod-usb-net-cdc-ncm kmod-usb-net-huawei-cdc-ncm kmod-usb-net-qmi-wwan \\
           \tkmod-usb-net-rndis kmod-usb-net-sierrawireless kmod-usb-serial \\
@@ -183,6 +232,7 @@ jobs:
             DEVICE_DTS_DIR := ../dts
             SUPPORTED_DEVICES += HCMT7981-688-emmc
             DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \\
+          \tluci uhttpd uhttpd-mod-ubus rpcd rpcd-mod-uci \\
           \tkmod-usb-acm kmod-usb-net-cdc-ether kmod-usb-net-cdc-mbim \\
           \tkmod-usb-net-cdc-ncm kmod-usb-net-huawei-cdc-ncm kmod-usb-net-qmi-wwan \\
           \tkmod-usb-net-rndis kmod-usb-net-sierrawireless kmod-usb-serial \\
