@@ -90,6 +90,33 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
+          def drop_block(path: Path, marker: str) -> None:
+              text = path.read_text()
+              lines = text.splitlines()
+              output = []
+              skipping = False
+              depth = 0
+              removed = False
+
+              for line in lines:
+                  if not skipping and line.lstrip().startswith(marker):
+                      skipping = True
+                      removed = True
+                      depth = line.count("{") - line.count("}")
+                      continue
+
+                  if skipping:
+                      depth += line.count("{") - line.count("}")
+                      if depth <= 0:
+                          skipping = False
+                          depth = 0
+                      continue
+
+                  output.append(line)
+
+              if removed:
+                  path.write_text("\n".join(output) + "\n")
+
           common = Path("target/linux/mediatek/dts/mt7981-nradio-common.dtsi")
           common_text = common.read_text()
           if '#include "mt7981.dtsi"' in common_text:
@@ -105,6 +132,12 @@ jobs:
               common_text = "\n".join(header_lines) + "\n\n" + common_text
 
           common.write_text(common_text)
+
+          for name in (
+              "mt7981-nradio-c5800-688-emmc.dtsi",
+              "mt7981-nradio-c8-688-emmc.dtsi",
+          ):
+              drop_block(Path("target/linux/mediatek/dts") / name, "&hnat")
 
           filogic = Path("target/linux/mediatek/image/filogic.mk")
           data = filogic.read_text()
