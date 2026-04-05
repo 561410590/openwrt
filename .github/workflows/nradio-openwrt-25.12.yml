@@ -187,6 +187,25 @@ jobs:
                   """,
               )
 
+          c5800 = Path("target/linux/mediatek/dts/mt7981-nradio-c5800-688-emmc.dtsi")
+          drop_block(c5800, "&xhci")
+          append_block(
+              c5800,
+              "&xhci",
+              """
+          &xhci {
+            mediatek,u3p-dis-msk = <0x0>;
+            phys = <&u2port0 PHY_TYPE_USB2>,
+              <&u3port0 PHY_TYPE_USB3>;
+            status = "okay";
+          };
+
+          &usb_phy {
+            status = "okay";
+          };
+              """,
+          )
+
           filogic = Path("target/linux/mediatek/image/filogic.mk")
           data = filogic.read_text()
           if "define Device/nradio_c5800-688" in data and "define Device/nradio_c8-688" in data:
@@ -215,13 +234,14 @@ jobs:
             SUPPORTED_DEVICES += HCMT7981-emmc
             DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \\
           \tluci luci-theme-argon luci-app-argon-config \\
+          \tluci-app-c5800-688-wtmodem usbutils usbids \\
           \tluci-i18n-base-zh-cn luci-i18n-firewall-zh-cn luci-i18n-package-manager-zh-cn \\
           \tuhttpd uhttpd-mod-ubus rpcd rpcd-mod-uci \\
           \tkmod-usb-acm kmod-usb-net-cdc-ether kmod-usb-net-cdc-mbim \\
           \tkmod-usb-net-cdc-ncm kmod-usb-net-huawei-cdc-ncm kmod-usb-net-qmi-wwan \\
           \tkmod-usb-net-rndis kmod-usb-net-sierrawireless kmod-usb-serial \\
           \tkmod-usb-serial-option kmod-usb-serial-qualcomm kmod-usb-serial-wwan \\
-          \tkmod-usb-wdm kmod-usb3
+          \tkmod-usb-wdm kmod-usb3 kmod-usb-core kmod-usb-xhci-hcd kmod-usb-xhci-mtk
             IMAGE_SIZE := 131072k
             IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata | check-size
           endef
@@ -451,6 +471,19 @@ jobs:
           rm -rf package/thirdparty/luci-theme-argon package/thirdparty/luci-app-argon-config
           git clone --depth 1 https://github.com/jerrykuku/luci-theme-argon.git package/thirdparty/luci-theme-argon
           git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config.git package/thirdparty/luci-app-argon-config
+
+      - name: Add C5800 WTModem package
+        run: |
+          set -euxo pipefail
+          rm -rf .wtmodem-src package/thirdparty/luci-app-c5800-688-wtmodem
+          git clone --depth 1 --branch mtwifi-sync-20260321-002700 --filter=blob:none --sparse \
+            https://github.com/561410590/immortalwrt-mt798x-6.6.git .wtmodem-src
+          (
+            cd .wtmodem-src
+            git sparse-checkout set package/mtk/applications/5g-modem/luci-app-c5800-688-wtmodem
+          )
+          cp -a .wtmodem-src/package/mtk/applications/5g-modem/luci-app-c5800-688-wtmodem package/thirdparty/
+          rm -rf .wtmodem-src
 
       - name: Configure build
         run: |
